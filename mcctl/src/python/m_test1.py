@@ -61,6 +61,8 @@ P = ddsv.Process('P', state_trans_list)
 process_list = [P]
 
 lts_tbl = ddsv.concurrent_composition(process_list, SharedVars(), 'm_test1')
-lts_tbl.save_graph('m_test1')
 
 f = mcctl.Or(mcctl.And(mcctl.Prop('x=1', func0), mcctl.Prop('y>0', func1)), mcctl.Not(mcctl.Prop('z=0', func2)))
+
+marker = mcctl.LtsTblMarker(lts_tbl, f)
+marker.save_graph('m_test1')

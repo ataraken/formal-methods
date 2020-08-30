@@ -118,7 +118,7 @@ class State:
         return '{0:8} {1}'.format(self.name(), self.shared_vars.to_str())
 
     def to_graph_str(self, idx):
-        return '{0}\n{1:8}\n{2}'.format(idx, self.name(), self.shared_vars.to_graph_str())
+        return '{0}\n{1}\n{2}'.format(idx, self.name(), self.shared_vars.to_graph_str())
 
     def _is_same_location(self, target):
         l0 = ' '.join([self.location[p] for p in self.p_list])
