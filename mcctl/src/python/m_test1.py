@@ -2,7 +2,7 @@ import sys
 import copy
 import mcctl
 
-sys.path.append('../../ddsv/src/python')
+sys.path.append('../../../ddsv/src/python')
 
 import ddsv
 
