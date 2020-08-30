@@ -59,6 +59,9 @@ state_trans_list = [
 P = ddsv.Process('P', state_trans_list)
 Q = ddsv.Process('Q', state_trans_list)
 
+P.save_graph('m_que1_P')
+Q.save_graph('m_que1_Q')
+
 process_list = [P, Q]
 shared_vars = SharedVars(process_list)
 shared_vars.c[process_list.index(P)] = 2

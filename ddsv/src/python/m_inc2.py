@@ -64,5 +64,8 @@ q_state_trans_list = [
 P = ddsv.Process('P', p_state_trans_list)
 Q = ddsv.Process('Q', q_state_trans_list)
 
+P.save_graph('m_inc2_P')
+Q.save_graph('m_inc2_Q')
+
 lts_tbl = ddsv.concurrent_composition([P, Q], SharedVars(), 'm_inc2')
 lts_tbl.save_graph('m_inc2')

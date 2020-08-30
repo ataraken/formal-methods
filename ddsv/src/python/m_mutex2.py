@@ -61,5 +61,9 @@ q_state_trans_list = [
 
 P = ddsv.Process('P', p_state_trans_list)
 Q = ddsv.Process('Q', q_state_trans_list)
-lts_tbl = ddsv.concurrent_composition([P, Q], SharedVars(), 'm_mute2')
-lts_tbl.save_graph('m_mute2')
+
+P.save_graph('m_mutex2_P')
+Q.save_graph('m_mutex2_Q')
+
+lts_tbl = ddsv.concurrent_composition([P, Q], SharedVars(), 'm_mutex2')
+lts_tbl.save_graph('m_mutex2')

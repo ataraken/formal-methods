@@ -107,8 +107,10 @@ q_state_trans_list = [
 P = ddsv.Process('P', p_state_trans_list)
 Q = ddsv.Process('Q', q_state_trans_list)
 
+P.save_graph('m_prod_cons1_P')
+Q.save_graph('m_prod_cons1_Q')
+
 process_list = [P, Q]
 shared_vars = SharedVars(process_list)
-
 lts_tbl = ddsv.concurrent_composition(process_list, shared_vars, 'm_prod_cons1')
 lts_tbl.save_graph('m_prod_cons1')

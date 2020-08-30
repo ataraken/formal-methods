@@ -64,12 +64,14 @@ p_state_trans_list = [
 q_state_trans_list = [
     ddsv.StateTransition('0', [ddsv.Transition('deque', '1', GuardQueNotEmpty(), ActionDeque())]),
     ddsv.StateTransition('1', [ddsv.Transition('enque', '2', GuardQueNotFull(), ActionEnque())]),
-    ddsv.StateTransition('2', [ddsv.Transition('enque', '0', GuardQueNotFull(), ActionEnque()),
-                               ddsv.Transition('skip',  '0', GuardQueFull(), ddsv.ActionNop())])
+    ddsv.StateTransition('2', [ddsv.Transition('enque', '0', GuardQueNotFull(), ActionEnque())])
 ]
 
 P = ddsv.Process('P', p_state_trans_list)
 Q = ddsv.Process('Q', q_state_trans_list)
+
+P.save_graph('m_que2_P')
+Q.save_graph('m_que2_Q')
 
 process_list = [P, Q]
 shared_vars = SharedVars(process_list)

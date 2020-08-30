@@ -57,6 +57,8 @@ class Transition:
         return '{0} {1}'.format(self.label, self.location)
 
 class Process:
+    _dir_name = 'img'
+
     def __init__(self, name, state_trans):
         self.name = name
         self.state_trans = state_trans
@@ -66,14 +68,31 @@ class Process:
             if t.location == location:
                 return t.transitions
 
+    def save_graph(self, name):
+        G = pgv.AGraph(directed=True, strict=False)
+
+        for st in self.state_trans:
+            G.add_node('{0}{1}'.format(self.name, st.location))
+
+        for st in self.state_trans:
+            src_location = '{0}{1}'.format(self.name, st.location)
+            for t in st.transitions:
+                G.add_edge(src_location, '{0}{1}'.format(self.name, t.location), label=t.label)
+
+        sorted(G.edges(keys=True))
+        if not os.path.isdir(self._dir_name):
+            os.mkdir(self._dir_name)
+
+        G.layout(prog='dot')
+        G.draw(os.path.join(self._dir_name, '{0}.png'.format(name)))
+
 class State:
-    def create(r0, p_list):
-        s = State()
-        s.p_list = p_list
-        s.location = { p:p.state_trans[0].location for p in s.p_list }
-        s.shared_vars = r0
-        s._is_deadlock = True
-        return s
+    def __init__(self, r0=None, p_list=None):
+        if r0 != None and p_list != None:
+            self.p_list = p_list
+            self.location = { p:p.state_trans[0].location for p in self.p_list }
+            self.shared_vars = r0
+            self._is_deadlock = True
 
     def clone(self):
         dst = State()
@@ -185,7 +204,7 @@ class LtsTbl:
         G.draw(os.path.join(self._dir_name, '{0}.png'.format(name)))
 
 def concurrent_composition(process_list, r0, name):
-    s0 = State.create(r0, process_list)
+    s0 = State(r0, process_list)
     lts_tbl = bfs(process_list, s0)
     return lts_tbl
 
