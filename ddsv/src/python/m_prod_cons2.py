@@ -1,5 +1,6 @@
 from abc import ABCMeta
 from abc import abstractmethod
+from collections import OrderedDict
 
 import ddsv
 
@@ -8,7 +9,7 @@ class SharedVars(ddsv.SharedVarsInterface):
 
     def __init__(self, process_list):
         self.mutex = False
-        self.cond = { p:False for p in process_list }
+        self.cond = OrderedDict({ p:False for p in process_list })
         self.count = 0
 
     def clone(self):
@@ -74,7 +75,9 @@ class ActionWait(ddsv.Action):
 
 class ActionSignal(ddsv.Action):
     def exec(self, process, dest, src):
-        dest.shared_vars.cond[process] = False
+        ks = [ k for k in src.shared_vars.cond if src.shared_vars.cond[k] ]
+        if len(ks) != 0:
+            dest.shared_vars.cond[ks[0]] = False
 
 class ActionInc(ddsv.Action):
     def exec(self, process, dest, src):
