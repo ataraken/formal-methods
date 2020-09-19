@@ -79,7 +79,6 @@ class CompositeProcess(Process):
         self._lts_q = lts_q
         self._location_list  = [0]
         self._location_pair = { 0: (lts_p.initial_state().id(), lts_q.initial_state().id()) }
-        self._state_id = 1
 
     def location(self):
         return self._ctx.loc()
@@ -91,6 +90,7 @@ class CompositeProcess(Process):
         return Lts(hash_tbl)
 
     def make_transition(self, s0):
+        self._state_id = 1
         state_id_to_location = { s0.id(): (self._lts_p.initial_state().id(), self._lts_q.initial_state().id(), None) }
         state_id_to_object = { s0.id(): s0 }
 
@@ -141,22 +141,20 @@ class CompositeProcess(Process):
                         next_s = state_id_to_object[id_list[0]]
                     next_state.append(next_s)
 
-            for event_p in sync_ht_p:
-                for event_q in sync_ht_q:
-                    if event_p.equal(event_q):
-                        for next_p in sync_ht_p[event_p]:
-                            for next_q in sync_ht_q[event_q]:
-                                id_list = [ id for id in state_id_to_location.keys() if ((state_id_to_location[id][0] == next_p.id()) and (state_id_to_location[id][1] == next_q.id())) ]
-                                location = ( next_p.id(), next_q.id() )
-                                if not id_list:
-                                    next_s = CompositeState.create_next(self._state_id, location, event_p, next_p, next_q)
-                                    state_id_to_location[self._state_id] = ( next_p.id(), next_q.id() )
-                                    state_id_to_object[self._state_id] = next_s
-                                    self._state_id += 1
-                                else:
-                                    assert len(id_list) == 1
-                                    next_s = state_id_to_object[id_list[0]]
-                                next_state.append(next_s)
+            for event in sync_ht_p.keys() & sync_ht_q.keys():
+                for next_p in sync_ht_p[event]:
+                    for next_q in sync_ht_q[event]:
+                        location = ( next_p.id(), next_q.id() )
+                        id_list = [ id for id in state_id_to_location.keys() if (state_id_to_location[id] == location) ]
+                        if not id_list:
+                            next_s = CompositeState.create_next(self._state_id, location, event, next_p, next_q)
+                            state_id_to_location[self._state_id] = ( next_p.id(), next_q.id() )
+                            state_id_to_object[self._state_id] = next_s
+                            self._state_id += 1
+                        else:
+                            assert len(id_list) == 1
+                            next_s = state_id_to_object[id_list[0]]
+                        next_state.append(next_s)
             return next_state
         return transition
 
@@ -254,12 +252,10 @@ class Lts:
                 G.add_node(s.id(), label=s.to_str())
 
         for s in self._paths:
-            print('state s {0} {1}'.format(s.id(), len(self._paths[s])))
             for path in self._paths[s]:
                 tran = path.last_tran()
                 if tran[0] != None:
                     assert s.id() == tran[1].id(), '{0} {1}'.format(s.id(), tran[1].id())
-                    print('{0} -> {1}'.format(tran[0].id(), s.id()))
                     G.add_edge(tran[0].id(), s.id(), label=s.event().to_str())
 
         sorted(G.edges(keys=True))
