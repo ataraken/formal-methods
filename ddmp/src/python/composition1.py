@@ -16,11 +16,20 @@ class ProcessContext(ddmp.ProcessContextInterface):
 
     def transition(self, state):
         res = []
+
         if state.is_initial_state():
-            res = [ ddmp.ProcessState.create_next(self.next_loc(), self.loc(), e) for e in self._event_list ]
+            res.append(ddmp.ProcessState.create_next(self.next_loc(), self.loc(), self._event_list[0]))
+        else:
+            is_found = False
+            for event in self._event_list:
+                if is_found:
+                    res.append(ddmp.ProcessState.create_next(self.next_loc(), self.loc(), event))
+                    break
+                elif state.event().equal(event):
+                    is_found = True
         return res
 
-file_name = 'composition0'
+file_name = 'composition1'
 
 A = ddmp.Event('a')
 B = ddmp.Event('b')
@@ -28,10 +37,10 @@ C = ddmp.Event('c')
 D = ddmp.Event('d')
 E = ddmp.Event('e')
 
-sync = ddmp.SyncEventSet([A, B])
+sync = ddmp.SyncEventSet([C, E])
 
-P = ddmp.SingleProcess(ProcessContext('P', [A, B, C, E]))
-Q = ddmp.SingleProcess(ProcessContext('Q', [A, C, D]))
+P = ddmp.SingleProcess(ProcessContext('P', [A, C, D]))
+Q = ddmp.SingleProcess(ProcessContext('Q', [B, C, D, E]))
 
 lts_p = P.unfold()
 lts_q = Q.unfold()

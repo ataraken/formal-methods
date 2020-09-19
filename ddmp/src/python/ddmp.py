@@ -5,6 +5,26 @@ import pygraphviz as pgv
 from abc import ABCMeta
 from abc import abstractmethod
 
+class Event:
+    def __init__(self, label):
+        self._label = label
+
+    def equal(self, target):
+        return self._label == target._label
+
+    def to_str(self):
+        return self._label
+
+    def print(self):
+        print(self.to_str())
+
+class SyncEventSet:
+    def __init__(self, event_list):
+        self._list = event_list
+
+    def is_included(self, event_list):
+        return (set(event_list) <= set(self._list))
+
 class ProcessContextInterface(metaclass=ABCMeta):
     @abstractmethod
     def next_loc(self):
