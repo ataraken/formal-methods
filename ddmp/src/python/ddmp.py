@@ -69,9 +69,6 @@ class CompositeProcess(Process):
         return Lts(hash_tbl)
 
     def make_transition(self, s0):
-        all_state_p = self._lts_p.all_states()
-        all_state_q = self._lts_q.all_states()
-
         state_id_to_location = { s0.id(): (self._lts_p.initial_state().id(), self._lts_q.initial_state().id(), None) }
         state_id_to_object = { s0.id(): s0 }
 
