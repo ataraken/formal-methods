@@ -1,9 +1,7 @@
 import os
 import copy
-import pygraphviz as pgv
 
-from abc import ABCMeta
-from abc import abstractmethod
+import ddmp
 
 class Event:
     def __init__(self, label):
@@ -25,20 +23,7 @@ class SyncEventSet:
     def is_included(self, event_list):
         return (set(event_list) <= set(self._list))
 
-class ProcessContextInterface(metaclass=ABCMeta):
-    @abstractmethod
-    def next_loc(self):
-        pass
-
-    @abstractmethod
-    def loc(self):
-        pass
-
-    @abstractmethod
-    def transition(self, state):
-        pass
-
-class ProcessContext(ProcessContextInterface):
+class ProcessContext(ddmp.ProcessContextInterface):
     def __init__(self, name, event_list):
         self._loc = 0
         self._event_list = event_list
@@ -55,318 +40,8 @@ class ProcessContext(ProcessContextInterface):
     def transition(self, state):
         res = []
         if state.is_initial_state():
-            res = [ ProcessState.create_next(self.next_loc(), self.loc(), e) for e in self._event_list ]
+            res = [ ddmp.ProcessState.create_next(self.next_loc(), self.loc(), e) for e in self._event_list ]
         return res
-
-class Process:
-    def _bfs(self, s0, trans_func):
-        hash_tbl = { s0: [ Path(s0) ] }
-        que = [ s0 ]
-
-        while que:
-            s = que.pop(0)
-            next_state = [ t for t in trans_func(s) ]
-            for t in next_state:
-                if not t in hash_tbl.keys():
-                    que.append(t)
-                    hash_tbl[t] = [ Path.create(hash_tbl[s], t) ]
-                else:
-                    hash_tbl[t].append(Path.create(hash_tbl[s], t))
-
-        return hash_tbl
-
-class SingleProcess(Process):
-    def __init__(self, context):
-        self._ctx = context
-
-    def to_str(self):
-        return self._ctx.to_str()
-
-    def location(self):
-        return self._ctx.loc()
-
-    def unfold(self):
-        s0 = ProcessState.create_initial(self.location())
-        hash_tbl = self._bfs(s0, self._ctx.transition)
-        return Lts(hash_tbl)
-
-class CompositeProcess(Process):
-    def __init__(self, sync, lts_p, lts_q):
-        self._sync = sync
-        self._lts_p = lts_p
-        self._lts_q = lts_q
-        self._location_list  = [0]
-        self._location_pair = { 0: (lts_p.initial_state().id(), lts_q.initial_state().id()) }
-        self._state_id = 1
-
-    def location(self):
-        return self._ctx.loc()
-
-    def concurrent_composition(self):
-        s0 = CompositeState.create_initial((self._lts_p.initial_state().id(), self._lts_q.initial_state().id()), self._lts_p.initial_state(), self._lts_q.initial_state())
-        trans_func = self.make_transition(s0)
-        hash_tbl = self._bfs(s0, trans_func)
-        return Lts(hash_tbl)
-
-    def make_transition(self, s0):
-        all_state_p = self._lts_p.all_states()
-        all_state_q = self._lts_q.all_states()
-
-        state_id_to_location = { s0.id(): (self._lts_p.initial_state().id(), self._lts_q.initial_state().id(), None) }
-        state_id_to_object = { s0.id(): s0 }
-
-        def transition(s):
-            src_p = s.p
-            src_q = s.q
-
-            sync_ht_p = {}
-            sync_ht_q = {}
-
-            next_state = []
-
-            next_ps = lts_p.next_states(src_p)
-
-            for next_p in next_ps:
-                event = next_p.event()
-                if self._sync.is_included([event]):
-                    if not event in sync_ht_p.keys():
-                        sync_ht_p[event] = []
-                    sync_ht_p[event].append(next_p)
-                else:
-                    id_list = [ id for id in state_id_to_location.keys() if ((state_id_to_location[id][0] == next_p.id()) and (state_id_to_location[id][1] == src_q.id())) ]
-                    location = ( next_p.id(), src_q.id() )
-                    if not id_list:
-                        next_s = CompositeState.create_next(self._state_id, location, event, next_p, src_q)
-                        state_id_to_location[self._state_id] = ( next_p.id(), src_q.id() )
-                        state_id_to_object[self._state_id] = next_s
-                        self._state_id += 1
-                    else:
-                        assert len(id_list) == 1
-                        next_s = state_id_to_object[id_list[0]]
-                    next_state.append(next_s)
-
-            next_qs = lts_q.next_states(src_q)
-
-            for next_q in next_qs:
-                event = next_q.event()
-                if self._sync.is_included([event]):
-                    if not event in sync_ht_q.keys():
-                        sync_ht_q[event] = []
-                    sync_ht_q[event].append(next_q)
-                else:
-                    id_list = [ id for id in state_id_to_location.keys() if ((state_id_to_location[id][0] == src_p.id()) and (state_id_to_location[id][1] == next_q.id())) ]
-                    location = ( src_p.id(), next_q.id() )
-                    if not id_list:
-                        next_s = CompositeState.create_next(self._state_id, location, event, src_p, next_q)
-                        state_id_to_location[self._state_id] = ( src_p.id(), next_q.id() )
-                        state_id_to_object[self._state_id] = next_s
-                        self._state_id += 1
-                    else:
-                        assert len(id_list) == 1
-                        next_s = state_id_to_object[id_list[0]]
-                    next_state.append(next_s)
-
-            for event_p in sync_ht_p:
-                for event_q in sync_ht_q:
-                    if event_p.equal(event_q):
-                        for next_p in sync_ht_p[event_p]:
-                            for next_q in sync_ht_q[event_q]:
-                                id_list = [ id for id in state_id_to_location.keys() if ((state_id_to_location[id][0] == next_p.id()) and (state_id_to_location[id][1] == next_q.id())) ]
-                                location = ( next_p.id(), next_q.id() )
-                                if not id_list:
-                                    next_s = CompositeState.create_next(self._state_id, location, event_p, next_p, next_q)
-                                    state_id_to_location[self._state_id] = ( next_p.id(), next_q.id() )
-                                    state_id_to_object[self._state_id] = next_s
-                                    self._state_id += 1
-                                else:
-                                    assert len(id_list) == 1
-                                    next_s = state_id_to_object[id_list[0]]
-                                next_state.append(next_s)
-            return next_state
-        return transition
-
-class Path:
-    def create(paths, state):
-        assert paths
-
-        base_path = paths[0]
-        min_len = paths[0].length()
-        for path in paths:
-            if path.length() < min_len:
-                min_len = path.length()
-                base_path = path
-
-        new_path = copy.deepcopy(base_path)
-        new_path._add(state)
-        return new_path
-
-    def __init__(self, s0):
-        self._trans = [ { 's': s0, 'e': None } ]
-
-    def _add(self, s):
-        self._trans.append({ 's': s, 'e': None })
-
-    def length(self):
-        return len(self._trans)
-
-    def last_tran(self):
-        if len(self._trans) == 1:
-            return (None, self._trans[0]['s'])
-        else:
-            return (self._trans[-2]['s'], self._trans[-1]['s'])
-
-    def states(self):
-        return [ tran['s'] for tran in self._trans ]
-
-    def search_tran(self, s):
-        is_target_found = False
-        for tran in self._trans:
-            if is_target_found:
-                return tran['s']
-            if (tran['s']).equal(s):
-                is_target_found = True
-        return None
-
-    def to_str(self):
-        return 'path'
-
-    def print(self):
-        print('--------------------')
-        for idx, i in enumerate(self._trans):
-            print('[{0}] {1}'.format(idx, i['s'].to_str()))
-
-# Labelled Transition System
-class Lts:
-    _dir_name = 'img'
-
-    def __init__(self, hash_tbl):
-        self._paths = hash_tbl
-
-    def initial_state(self):
-        return (self.all_states())[0]
-
-    def all_states(self):
-        return list(self._paths.keys())
-
-    def path(self, s):
-        return self._paths[s]
-
-    def next_states(self, target):
-        res = []
-        for s in self._paths:
-            for path in self._paths[s]:
-                tran = path.search_tran(target)
-                if tran != None:
-                    res.append(tran)
-        return res
-
-    def save_graph(self, name):
-        G = pgv.AGraph(directed=True, strict=False)
-
-        for i, s in enumerate(self._paths):
-            if i == 0:
-                G.add_node(s.id(), label=s.to_str(), style='filled', fillcolor='cyan')
-            else:
-                G.add_node(s.id(), label=s.to_str())
-
-        for s in self._paths:
-            for path in self._paths[s]:
-                tran = path.last_tran()
-                if tran[0] != None:
-                    assert s.id() == tran[1].id()
-                    G.add_edge(tran[0].id(), s.id(), label=s.event().to_str())
-
-        sorted(G.edges(keys=True))
-
-        if not os.path.isdir(self._dir_name):
-            os.mkdir(self._dir_name)
-
-        G.layout(prog='dot')
-        G.draw(os.path.join(self._dir_name, '{0}.png'.format(name)))
-
-class StateInterface(metaclass=ABCMeta):
-    @abstractmethod
-    def id(self):
-        pass
-
-    @abstractmethod
-    def event(self):
-        pass
-
-    @abstractmethod
-    def is_initial_state(self):
-        pass
-
-    @abstractmethod
-    def equal(self, target):
-        pass
-
-    @abstractmethod
-    def label(self):
-        pass
-
-    @abstractmethod
-    def to_str(self):
-        pass
-
-class AbstractState(StateInterface):
-    _initial_id = 0
-
-    def __init__(self, id, event):
-        self._id = id
-        self._event = event
-
-    def id(self):
-        return self._id
-
-    def event(self):
-        return self._event
-
-    def is_initial_state(self):
-        return ProcessState._initial_id == self._id
-
-    def equal(self, target):
-        return self._id == target._id
-
-class ProcessState(AbstractState):
-    def create_initial(location):
-        return ProcessState(ProcessState._initial_id, location, None)
-
-    def create_next(id, location, event):
-        return ProcessState(id, location, event)
-
-    def __init__(self, id, location, event):
-        super(ProcessState, self).__init__(id, event)
-        self._loc = location
-
-    def label(self):
-        return self._loc
-
-    def to_str(self):
-        return '{0}\n{1}'.format(self._id, self.label())
-
-class CompositeState(AbstractState):
-    def create_initial(location, p, q):
-        return CompositeState(CompositeState._initial_id, location, None, p, q)
-
-    def create_next(id, location, event, p, q):
-        return CompositeState(id, location, event, p, q)
-
-    def __init__(self, id, location, event, p, q):
-        super(CompositeState, self).__init__(id, event)
-        self._loc = location
-        self.p = p
-        self.q = q
-
-    def equal(self, p, q):
-        return (self.p.id() == p.id()) and (self.q.id() == q.id())
-
-    def label(self):
-        print('---', self.p.label(), self.q.label())
-        return '{0}\n{1}'.format(self.p.label(), self.q.label())
-
-    def to_str(self):
-        return '{0}\n{1}'.format(self._id, self.label())
 
 file_name = 'composition0'
 
@@ -378,8 +53,8 @@ E = Event('e')
 
 sync = SyncEventSet([A, B])
 
-P = SingleProcess(ProcessContext('P', [A, B, C, E]))
-Q = SingleProcess(ProcessContext('Q', [A, C, D]))
+P = ddmp.SingleProcess(ProcessContext('P', [A, B, C, E]))
+Q = ddmp.SingleProcess(ProcessContext('Q', [A, C, D]))
 
 lts_p = P.unfold()
 lts_q = Q.unfold()
@@ -387,6 +62,6 @@ lts_q = Q.unfold()
 lts_p.save_graph('{0}_P.png'.format(file_name))
 lts_q.save_graph('{0}_Q.png'.format(file_name))
 
-cp = CompositeProcess(sync, lts_p, lts_q)
+cp = ddmp.CompositeProcess(sync, lts_p, lts_q)
 lts = cp.concurrent_composition()
 lts.save_graph('{0}.png'.format(file_name))
