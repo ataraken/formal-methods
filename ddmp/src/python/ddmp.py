@@ -51,7 +51,9 @@ class Process:
                     que.append(t)
                     hash_tbl[t] = [ Path.create(hash_tbl[s], t) ]
                 else:
-                    hash_tbl[t].append(Path.create(hash_tbl[s], t))
+                    tmp_path = Path.create(hash_tbl[s], t)
+                    if len([ p for p in hash_tbl[t] if p.equal(tmp_path) ]) == 0:
+                        hash_tbl[t].append(tmp_path)
 
         return hash_tbl
 
@@ -101,17 +103,15 @@ class CompositeProcess(Process):
 
             next_state = []
 
-            next_ps = self._lts_p.next_states(src_p)
-
-            for next_p in next_ps:
+            for next_p in self._lts_p.next_states(src_p):
                 event = next_p.event()
                 if self._sync.is_included([event]):
                     if not event in sync_ht_p.keys():
                         sync_ht_p[event] = []
                     sync_ht_p[event].append(next_p)
                 else:
-                    id_list = [ id for id in state_id_to_location.keys() if ((state_id_to_location[id][0] == next_p.id()) and (state_id_to_location[id][1] == src_q.id())) ]
                     location = ( next_p.id(), src_q.id() )
+                    id_list = [ id for id in state_id_to_location.keys() if state_id_to_location[id] == location ]
                     if not id_list:
                         next_s = CompositeState.create_next(self._state_id, location, event, next_p, src_q)
                         state_id_to_location[self._state_id] = ( next_p.id(), src_q.id() )
@@ -122,17 +122,15 @@ class CompositeProcess(Process):
                         next_s = state_id_to_object[id_list[0]]
                     next_state.append(next_s)
 
-            next_qs = self._lts_q.next_states(src_q)
-
-            for next_q in next_qs:
+            for next_q in self._lts_q.next_states(src_q):
                 event = next_q.event()
                 if self._sync.is_included([event]):
                     if not event in sync_ht_q.keys():
                         sync_ht_q[event] = []
                     sync_ht_q[event].append(next_q)
                 else:
-                    id_list = [ id for id in state_id_to_location.keys() if ((state_id_to_location[id][0] == src_p.id()) and (state_id_to_location[id][1] == next_q.id())) ]
                     location = ( src_p.id(), next_q.id() )
+                    id_list = [ id for id in state_id_to_location.keys() if state_id_to_location[id] == location ]
                     if not id_list:
                         next_s = CompositeState.create_next(self._state_id, location, event, src_p, next_q)
                         state_id_to_location[self._state_id] = ( src_p.id(), next_q.id() )
@@ -173,12 +171,15 @@ class Path:
                 min_len = path.length()
                 base_path = path
 
-        new_path = copy.deepcopy(base_path)
+        new_path = Path(None, base_path._trans)
         new_path._add(state)
         return new_path
 
-    def __init__(self, s0):
-        self._trans = [ { 's': s0, 'e': None } ]
+    def __init__(self, s0, trans=None):
+        if trans == None:
+            self._trans = [ { 's': s0, 'e': None } ]
+        else:
+            self._trans = [ { 's': tran['s'], 'e': tran['e'] } for tran in trans ]
 
     def _add(self, s):
         self._trans.append({ 's': s, 'e': None })
@@ -186,11 +187,11 @@ class Path:
     def length(self):
         return len(self._trans)
 
-    def last_tran(self):
-        if len(self._trans) == 1:
-            return (None, self._trans[0]['s'])
-        else:
-            return (self._trans[-2]['s'], self._trans[-1]['s'])
+    def equal(self, target):
+        res = False
+        if target.length() == self.length():
+            res = len([ True for t0, t1 in zip(self._trans, target._trans) if not (t0['s'].equal2(t1['s'])) ]) == 0
+        return res
 
     def states(self):
         return [ tran['s'] for tran in self._trans ]
@@ -203,6 +204,12 @@ class Path:
             if (tran['s']).equal(s):
                 is_target_found = True
         return None
+
+    def last_tran(self):
+        if len(self._trans) == 1:
+            return (None, self._trans[0]['s'])
+        else:
+            return (self._trans[-2]['s'], self._trans[-1]['s'])
 
     def to_str(self):
         return 'path'
@@ -247,10 +254,12 @@ class Lts:
                 G.add_node(s.id(), label=s.to_str())
 
         for s in self._paths:
+            print('state s {0} {1}'.format(s.id(), len(self._paths[s])))
             for path in self._paths[s]:
                 tran = path.last_tran()
                 if tran[0] != None:
-                    assert s.id() == tran[1].id()
+                    assert s.id() == tran[1].id(), '{0} {1}'.format(s.id(), tran[1].id())
+                    print('{0} -> {1}'.format(tran[0].id(), s.id()))
                     G.add_edge(tran[0].id(), s.id(), label=s.event().to_str())
 
         sorted(G.edges(keys=True))
@@ -337,6 +346,9 @@ class CompositeState(AbstractState):
 
     def equal(self, p, q):
         return (self.p.id() == p.id()) and (self.q.id() == q.id())
+
+    def equal2(self, target):
+        return target.equal(self.p, self.q)
 
     def label(self):
         print('---', self.p.label(), self.q.label())
